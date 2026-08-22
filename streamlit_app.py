@@ -54,7 +54,9 @@ if st.button("🔍 افحصي التركيبة"):
         st.subheader("📊 النتيجة")
         st.dataframe(result_df, use_container_width=True)
         
-        if '🚨' in result_df['الحالة'].values:
-            st.error("🚨 تنبيه: هناك مواد خطيرة!")
+        if result_df['الحالة'].str.contains('🚨').any():
+            st.error("🚨 تنبيه: هناك مواد خطيرة تتجاوز الحد الآمن!")
+        elif result_df['الحالة'].str.contains('⚠️').any():
+            st.warning("⚠️ بعض المواد قريبة من الحد أو غير موجودة، راجعي التركيز.")
         else:
             st.success("🎉 جميع المواد آمنة!")
