@@ -1,40 +1,55 @@
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
-"""
-# Welcome to Streamlit!
+# 1. إعدادات الصفحة
+st.set_page_config(page_title="🛡️ ماسح INCI الذكي", layout="wide")
+st.title("🛡️ الماسح الضوئي الذكي للتركيبات")
+st.write("أدخلي قائمة المكونات (INCI) وسأخبركِ إذا كانت آمنة أم لا.")
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+# 2. محاولة قراءة ملف الإكسل (تأكدي من اسمه لاحقاً)
+try:
+    df = pd.read_excel('cosmetic_active_ingredients-1.xlsx', 
+                        sheet_name='Ingredients', 
+                        header=1)
+    df_ref = df[['Scientific / INCI Name', 'Max Safe %']].copy()
+    df_ref.columns = ['Ingredient', 'Max_Percentage']
+    df_ref = df_ref.dropna(subset=['Ingredient'])
+    st.sidebar.success(f"✅ قاعدة البيانات جاهزة ({len(df_ref)} مادة)")
+except Exception as e:
+    st.sidebar.error(f"⚠️ لم أجد ملف الإكسل. تأكدي من رفعه: {e}")
+    st.stop()
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+# 3. واجهة الإدخال
+st.subheader("📋 أدخلي تركيبة العميلة")
+input_text = st.text_area("اكتبي القائمة (مثال: Glycerin:15, Coconut Oil:10)")
 
-num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
-
-indices = np.linspace(0, 1, num_points)
-theta = 2 * np.pi * num_turns * indices
-radius = indices
-
-x = radius * np.cos(theta)
-y = radius * np.sin(theta)
-
-df = pd.DataFrame({
-    "x": x,
-    "y": y,
-    "idx": indices,
-    "rand": np.random.randn(num_points),
-})
-
-st.altair_chart(alt.Chart(df, height=700, width=700)
-    .mark_point(filled=True)
-    .encode(
-        x=alt.X("x", axis=None),
-        y=alt.Y("y", axis=None),
-        color=alt.Color("idx", legend=None, scale=alt.Scale()),
-        size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-    ))
+if st.button("🔍 افحصي التركيبة"):
+    if not input_text:
+        st.warning("الرجاء إدخال قائمة.")
+    else:
+        results = []
+        for line in input_text.split(','):
+            if ':' not in line: continue
+            name, perc_str = line.split(':')
+            name = name.strip()
+            try: client_perc = float(perc_str.strip())
+            except: continue
+            
+            row = df_ref[df_ref['Ingredient'].str.lower() == name.lower()]
+            if row.empty:
+                results.append({'المادة': name, 'التركيز': client_perc, 'الحالة': '⚠️ غير موجودة'})
+            else:
+                max_val = row.iloc[0]['Max_Percentage']
+                if client_perc <= max_val: status = '✅ آمن'
+                elif client_perc <= max_val * 1.15: status = '⚠️ قريب من الحد'
+                else: status = '🚨 خطر! تجاوز الحد'
+                results.append({'المادة': name, 'التركيز': client_perc, 'الحد الأقصى': max_val, 'الحالة': status})
+        
+        result_df = pd.DataFrame(results)
+        st.subheader("📊 النتيجة")
+        st.dataframe(result_df, use_container_width=True)
+        
+        if '🚨' in result_df['الحالة'].values:
+            st.error("🚨 تنبيه: هناك مواد خطيرة!")
+        else:
+            st.success("🎉 جميع المواد آمنة!")
